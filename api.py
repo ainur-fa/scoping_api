@@ -56,6 +56,7 @@ def method_handler(request, ctx, store):
             response, code = ERRORS.get(INVALID_REQUEST), INVALID_REQUEST
         return response, code
     except (ValueError, AttributeError):
+        logging.exception(e)
         return ERRORS.get(INVALID_REQUEST), INVALID_REQUEST
 
 
