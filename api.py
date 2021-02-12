@@ -11,6 +11,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from api_requests import ClientsInterestsRequest, OnlineScoreRequest, MethodRequest
 from scoring import get_score, get_interests
+from custom_erros import ValidationError
 from constants import SALT, ADMIN_SALT, OK, BAD_REQUEST, FORBIDDEN, \
     NOT_FOUND, INVALID_REQUEST, INTERNAL_ERROR, ERRORS
 
@@ -27,7 +28,7 @@ def check_auth(request):
     if digest == request.token:
         logging.info(f'Authorization success')
         return True
-    logging.info(
+    logging.error(
         f'Authorization failed, expected "{digest}",'
         f'\n but "{request.token}" received')
     return False
@@ -45,25 +46,26 @@ def authorization(func):
 
 def method_handler(request, ctx, store):
     try:
-        req = MethodRequest(request.get('body'))
+        req = MethodRequest()
+        req.validate(request.get('body'))
         logging.info(f'Requested method value: "{req.method}"')
         if req.method == 'online_score':
             response, code = online_score_handler(req, ctx, store)
         elif req.method == 'clients_interests':
             response, code = clients_interests_handler(req, ctx, store)
         else:
-            logging.info(f'Unavailable method value')
+            logging.error(f'Unavailable method value')
             response, code = ERRORS.get(INVALID_REQUEST), INVALID_REQUEST
         return response, code
-    except (ValueError, AttributeError):
-        logging.exception(e)
+    except ValidationError:
         return ERRORS.get(INVALID_REQUEST), INVALID_REQUEST
 
 
 @authorization
 def online_score_handler(req, ctx, store):
     arguments = req.arguments
-    online_score = OnlineScoreRequest(arguments)
+    online_score = OnlineScoreRequest()
+    online_score.validate(arguments)
     ctx['has'] = [key for key, val in arguments.items() if val is not None]
     if req.is_admin:
         score = int(ADMIN_SALT)
@@ -79,7 +81,8 @@ def online_score_handler(req, ctx, store):
 
 @authorization
 def clients_interests_handler(req, ctx, store):
-    clients_interests = ClientsInterestsRequest(req.arguments)
+    clients_interests = ClientsInterestsRequest()
+    clients_interests.validate(req.arguments)
     ctx['nclients'] = len(clients_interests.client_ids)
     interests = {_id: get_interests(store, _id) for _id in
                  clients_interests.client_ids}
@@ -108,7 +111,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
             logging.info(f'Received request: {request}')
         except Exception as e:
             code = BAD_REQUEST
-            logging.info(e)
+            logging.error(e)
 
         if request:
             path = self.path.strip("/")
@@ -122,7 +125,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
                     logging.exception("Unexpected error: %s" % e)
                     code = INTERNAL_ERROR
             else:
-                logging.info(f'{path} is not valid path')
+                logging.error(f'{path} is not valid path')
                 code = NOT_FOUND
 
         self.send_response(code)

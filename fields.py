@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 import logging
+from custom_erros import ValidationError
 
 UNKNOWN = 0
 MALE = 1
@@ -28,20 +29,20 @@ class Field:
 
     def __set__(self, owner, value):
         if value is None and (self.required or not self.nullable):
-            raise AttributeError(
+            raise ValidationError(
                 f'{self.__class__.__name__} is required and not nullable')
         elif value is None and self.nullable:
             self._name = value
         else:
             if isinstance(value, self._type):
-                self.verify(value)
+                self.validate(value)
                 self._name = value
             else:
-                raise ValueError(
+                raise ValidationError(
                     f'{self.__class__.__name__} must be {self._type}, '
                     f'but {type(value).__name__} received')
 
-    def verify(self, value):
+    def validate(self, value):
         pass
 
 
@@ -55,62 +56,62 @@ class ArgumentsField(Field):
 
 class EmailField(CharField):
 
-    def verify(self, value):
+    def validate(self, value):
         if '@' in value:
             return
         else:
-            raise ValueError(f'{self.__class__.__name__} must be contains "@')
+            raise ValidationError(f'{self.__class__.__name__} must be contains "@')
 
 
 class PhoneField(Field):
     _type = (int, str)
 
-    def verify(self, value):
+    def validate(self, value):
         value = str(value)
         if not value:
             pass
         elif len(value) != 11:
-            raise ValueError('PhoneField must contain 11 numbers')
+            raise ValidationError('PhoneField must contain 11 numbers')
         elif not value.isdigit():
-            raise ValueError('PhoneField must contain only digits')
+            raise ValidationError('PhoneField must contain only digits')
         elif not value.startswith('7'):
-            raise ValueError('PhoneField must starts with "7"')
+            raise ValidationError('PhoneField must starts with "7"')
 
 
 class DateField(CharField):
 
-    def verify(self, value):
+    def validate(self, value):
         try:
             datetime.datetime.strptime(value, '%d.%m.%Y')
-        except ValueError as e:
-            logging.info(e)
-            raise e
+        except Exception as e:
+            # logging.info(e)
+            raise ValidationError("DateField is incorrect")
 
 
 class BirthDayField(DateField):
 
-    def verify(self, value):
-        super()
+    def validate(self, value):
+        super().validate(value)
         value = str(value)
         birthday_year = datetime.datetime.strptime(value, '%d.%m.%Y').year
         now_year = datetime.datetime.now().year
         if (now_year - birthday_year) > 70:
-            raise ValueError('More than 70 yeas have been since date of birth')
+            raise ValidationError('More than 70 yeas have been since date of birth')
 
 
 class GenderField(Field):
     _type = int
 
-    def verify(self, value):
+    def validate(self, value):
         if value not in GENDERS:
-            raise ValueError(
+            raise ValidationError(
                 'Wrong value for GenderField, permissible value in [0, 1, 2]')
 
 
 class ClientIDsField(Field):
     _type = list
 
-    def verify(self, value):
+    def validate(self, value):
         all_is_int = all([type(i) is int for i in value]) if value else False
         if not all_is_int:
-            raise ValueError('ClientIDsField must contains only int items')
+            raise ValidationError('ClientIDsField must contains only int items')
