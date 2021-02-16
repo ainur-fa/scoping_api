@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import datetime
-import logging
 from custom_erros import ValidationError
 
 UNKNOWN = 0
@@ -16,27 +15,27 @@ GENDERS = {
 class Field:
     _type = None
 
-    def __init__(self, required, nullable=False):
+    def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
         self._name = None
 
     def __get__(self, instance, owner):
-        return self._name
+        return instance.__dict__[self._name]
 
     def __set_name__(self, owner, name):
-        self._name = name
+        self._name = '_' + name
 
     def __set__(self, owner, value):
         if value is None and (self.required or not self.nullable):
             raise ValidationError(
                 f'{self.__class__.__name__} is required and not nullable')
-        elif value is None and self.nullable:
-            self._name = value
+        if (value is None or value == '') and self.nullable:
+            owner.__dict__[self._name] = None
         else:
             if isinstance(value, self._type):
                 self.validate(value)
-                self._name = value
+                owner.__dict__[self._name] = value
             else:
                 raise ValidationError(
                     f'{self.__class__.__name__} must be {self._type}, '
@@ -84,7 +83,6 @@ class DateField(CharField):
         try:
             datetime.datetime.strptime(value, '%d.%m.%Y')
         except Exception as e:
-            # logging.info(e)
             raise ValidationError("DateField is incorrect")
 
 
